@@ -6,3 +6,4 @@ uvicorn
 python-multipart
 gTTS
 pydantic
+psycopg2-binary
