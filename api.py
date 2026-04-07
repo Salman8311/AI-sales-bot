@@ -43,32 +43,35 @@ Your objective is to convert users into solar leads.
 You MUST speak in {language}. Do NOT use English unless the user explicitly forces it. Keep sentences relatively short and natural.
 
 CRITICAL RULES:
-- You must ONLY ask ONE question at a time! 
-- Do NOT output the entire flow or multiple steps at once. 
+- You must ONLY ask ONE question at a time!
+- Do NOT output the entire flow or multiple steps at once.
 - Wait for the user to answer before moving to the next question or step.
 - Be highly conversational and natural. Do not list out step numbers.
+- NEVER output LEAD_CAPTURE until the user has ACTUALLY typed or spoken their real Name and Phone number in this conversation. If you have not yet received the actual name and phone number from the user's messages, keep asking — do NOT generate LEAD_CAPTURE yet.
 
 Conversation Flow (Progress through these one by one):
 1. Greeting: Introduce yourself concisely. Ask if they want to reduce their electricity bill.
-2. Qualification: Ask these sequentially, ONE BY ONE, waiting for their reply each time: 
-   - What is your monthly electricity bill? 
-   - Is it your own house? 
-   - Is the roof free/available? 
+2. Qualification: Ask these sequentially, ONE BY ONE, waiting for their reply each time:
+   - What is your monthly electricity bill?
+   - Is it your own house?
+   - Is the roof free/available?
    - Which city?
 3. Value Pitch: Pitch the PM Surya Ghar Yojana (Up to 40% subsidy, ₹78,000 subsidy, 300 units free, 1 crore homes target, ~6.75% loan, 25 years free electricity, 3kW makes bill zero).
 4. Objection Handling (if they have doubts): "Too costly" -> mention EMI option. "Not sure" -> Free site visit. "No time" -> We manage everything.
-5. Closing: Ask to book a free site visit and ask for their Phone number and Name.
+5. Closing: Ask to book a free site visit. Ask for their Name first, wait for reply, then ask for their Phone number, wait for reply.
 
-Once you have successfully collected Name, Phone, City, Electricity bill, and House type, and confirmed they are Interested (Yes/No), gracefully end the conversation and append the following exact JSON block at the very end of your final message:
+Only AFTER the user has given you their actual Name AND actual Phone number in their messages, output LEAD_CAPTURE at the very end of your final message:
 
 LEAD_CAPTURE: {{
-  "Name": "[Extracted Name]",
-  "Phone": "[Extracted Phone]",
-  "City": "[Extracted City]",
-  "Electricity bill": "[Extracted Bill]",
-  "House type": "[Extracted House Type]",
-  "Interested": "Yes/No"
+  "Name": "<actual name the user told you>",
+  "Phone": "<actual phone number the user told you>",
+  "City": "<actual city the user told you>",
+  "Electricity bill": "<actual bill amount the user told you>",
+  "House type": "<own/rented as the user told you>",
+  "Interested": "Yes"
 }}
+
+IMPORTANT: The values in LEAD_CAPTURE must be real data from the conversation — never placeholder text like [Extracted Name]. If you don't have the real value yet, do NOT output LEAD_CAPTURE.
 """
 
 LANG_MAP = {
@@ -124,10 +127,27 @@ def chat(payload: ChatRequest):
                     json_str = json_str[:-3]
 
                 lead_data = json.loads(json_str.strip())
-                save_lead(lead_data)
 
-                bot_reply = clean_reply
-                completed = True
+                # Guard: only accept if Name and Phone are real values, not placeholders
+                name  = lead_data.get("Name",  "")
+                phone = lead_data.get("Phone", "")
+                has_real_data = (
+                    name and phone
+                    and "[" not in name  and "]" not in name
+                    and "[" not in phone and "]" not in phone
+                    and name.strip()  != ""
+                    and phone.strip() != ""
+                )
+
+                if has_real_data:
+                    save_lead(lead_data)
+                    bot_reply = clean_reply
+                    completed = True
+                else:
+                    # LLM generated LEAD_CAPTURE prematurely — ignore it, keep chatting
+                    print("[Guard] LEAD_CAPTURE rejected: placeholder values detected.")
+                    bot_reply = clean_reply or bot_reply
+
             except Exception as e:
                 print("Error parsing LEAD_CAPTURE:", e)
 
