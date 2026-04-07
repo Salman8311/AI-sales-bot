@@ -10,57 +10,44 @@ let isRecording = false;
 let mediaRecorder = null;
 let audioChunks = [];
 
-// ── Audio Engine ─────────────────────────────────────────────────────────────
-// We use Web Audio API (AudioContext) to decode and play the bot's TTS audio.
-// This is immune to browser autoplay restrictions because the AudioContext is
-// created (and resumed) synchronously inside a user-gesture handler.
+// ── Browser TTS (Web Speech API) ─────────────────────────────────────────────
+// Runs 100% client-side — no gTTS, no server round-trip, works on all HTTPS
+// deployments (Render, Vercel, etc.) with zero external API calls.
 
-let audioCtx = null;
-let currentSource = null;  // currently playing AudioBufferSourceNode
+const LANG_TTS_MAP = {
+    'Hindi':   'hi-IN',
+    'Telugu':  'te-IN',
+    'Urdu':    'ur-PK',
+    'English': 'en-US'
+};
 
-/**
- * Create (or resume) the AudioContext.
- * Must be called from inside a user-gesture event handler.
- */
-function unlockAudio() {
-    if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function speakText(text, language) {
+    if (!window.speechSynthesis) return;
+
+    // Strip any leftover LEAD_CAPTURE JSON before speaking
+    const cleanText = text.split('LEAD_CAPTURE:')[0].trim();
+    if (!cleanText) return;
+
+    window.speechSynthesis.cancel(); // stop any ongoing speech
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang  = LANG_TTS_MAP[language] || 'hi-IN';
+    utterance.rate  = 1.05;
+    utterance.pitch = 1.0;
+
+    // Some browsers need voices to load first
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+        // Try to find a matching voice; fall back to default
+        const match = voices.find(v => v.lang.startsWith(utterance.lang.split('-')[0]));
+        if (match) utterance.voice = match;
     }
-    if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-    }
+
+    window.speechSynthesis.speak(utterance);
 }
 
-/**
- * Decode a base64 MP3 string and play it via AudioContext.
- * Stops any currently playing audio first.
- */
-async function playAudioBase64(base64Str) {
-    if (!base64Str || !audioCtx) return;
-
-    // Stop previous playback
-    if (currentSource) {
-        try { currentSource.stop(); } catch (_) {}
-        currentSource = null;
-    }
-
-    try {
-        // base64 → ArrayBuffer
-        const binary = atob(base64Str);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-
-        // Decode MP3 → AudioBuffer → play
-        const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
-        const source = audioCtx.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(audioCtx.destination);
-        source.start(0);
-        currentSource = source;
-    } catch (e) {
-        console.error('Audio playback error:', e);
-    }
-}
+// Ensure voice list is loaded (Chrome requires this)
+window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
 
 // ── UI Helpers ────────────────────────────────────────────────────────────────
 
@@ -113,12 +100,12 @@ async function sendChatRequest(userText) {
         if (data.reply) {
             messages.push({ role: 'assistant', content: data.reply });
             appendMessage(data.reply, 'bot');
-            if (data.audio_base64) {
-                playAudioBase64(data.audio_base64);
-            }
+            // Speak the reply using browser TTS
+            speakText(data.reply, languageSelect.value);
         }
 
         if (data.completed) {
+            window.speechSynthesis.cancel();
             appendMessage('🎉 Lead Captured Successfully! We will contact you soon.', 'bot');
             textInput.disabled = true;
             micBtn.disabled = true;
@@ -132,15 +119,11 @@ async function sendChatRequest(userText) {
     }
 }
 
-// ── Send button / Enter key ───────────────────────────────────────────────────
+// ── Send Button / Enter Key ───────────────────────────────────────────────────
 
 sendBtn.addEventListener('click', () => {
     const text = textInput.value.trim();
     if (!text) return;
-
-    // Unlock AudioContext synchronously inside user gesture
-    unlockAudio();
-
     appendMessage(text, 'user');
     textInput.value = '';
     sendChatRequest(text);
@@ -150,9 +133,9 @@ textInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') sendBtn.click();
 });
 
-// ── Voice Recording ───────────────────────────────────────────────────────────
+// ── Microphone / Voice Input ──────────────────────────────────────────────────
 
-async function setupAudio() {
+async function setupMic() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         alert('Your browser does not support microphone access.');
         return;
@@ -203,26 +186,20 @@ async function sendAudioForTranscription(audioBlob) {
 }
 
 micBtn.addEventListener('click', async () => {
-    // Unlock AudioContext synchronously inside user gesture
-    unlockAudio();
+    // Stop bot from speaking when user wants to talk
+    window.speechSynthesis.cancel();
 
     if (!mediaRecorder) {
-        await setupAudio();
+        await setupMic();
         if (!mediaRecorder) return;
     }
 
     if (isRecording) {
-        // Stop recording — onstop handler will transcribe and reply
-        if (currentSource) {
-            try { currentSource.stop(); } catch (_) {} // stop bot speaking
-            currentSource = null;
-        }
         mediaRecorder.stop();
         isRecording = false;
         micBtn.classList.remove('recording');
         recordingIndicator.style.display = 'none';
     } else {
-        // Start recording
         audioChunks = [];
         mediaRecorder.start();
         isRecording = true;

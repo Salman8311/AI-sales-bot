@@ -1,14 +1,12 @@
 import os
 import json
-import base64
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 from openai import OpenAI
 from dotenv import load_dotenv
-from gtts import gTTS
 import tempfile
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -97,7 +95,6 @@ def read_root():
 def chat(payload: ChatRequest):
     try:
         language_name = payload.language
-        lang_code = LANG_MAP.get(language_name, "hi")
 
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(language=language_name)
         api_messages = [{"role": "system", "content": system_prompt}]
@@ -119,41 +116,25 @@ def chat(payload: ChatRequest):
                 parts = bot_reply.split("LEAD_CAPTURE:")
                 clean_reply = parts[0].strip()
                 json_str = parts[1].strip()
-                
+
                 # sometimes LLM outputs ```json around it
                 if json_str.startswith("```json"):
                     json_str = json_str[7:]
                 if json_str.endswith("```"):
                     json_str = json_str[:-3]
-                    
+
                 lead_data = json.loads(json_str.strip())
                 save_lead(lead_data)
-                
+
                 bot_reply = clean_reply
                 completed = True
             except Exception as e:
                 print("Error parsing LEAD_CAPTURE:", e)
 
-        # Generate TTS audio
-        audio_base64 = ""
-        if bot_reply.strip():
-            try:
-                tts = gTTS(text=bot_reply, lang=lang_code, slow=False)
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
-                    temp_path = fp.name
-                tts.save(temp_path)
-                
-                with open(temp_path, "rb") as f:
-                    audio_data = f.read()
-                    audio_base64 = base64.b64encode(audio_data).decode("utf-8")
-                
-                os.remove(temp_path)
-            except Exception as e:
-                print("TTS Error:", e)
-
+        # TTS is handled client-side via Web Speech API
         return {
             "reply": bot_reply,
-            "audio_base64": audio_base64,
+            "audio_base64": "",
             "completed": completed
         }
 
