@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mierae Solar AI Assistant</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        
+        <!-- Header -->
+        <header class="glass-header">
+            <div class="logo">
+                <i class="fa-solid fa-sun icon-sun"></i>
+                <h1>Mierae Solar</h1>
+            </div>
+            <div class="controls">
+                <select id="language-select" class="lang-dropdown">
+                    <option value="Hindi">Hindi</option>
+                    <option value="Telugu">Telugu</option>
+                    <option value="Urdu">Urdu</option>
+                    <option value="English">English</option>
+                </select>
+            </div>
+        </header>
+
+        <!-- Chat Area -->
+        <main class="chat-container glass-panel" id="chat-container">
+            <div class="message system-msg">
+                <p>Welcome to Mierae Solar! I'm your AI assistant. How can I help you save on your electricity bill?</p>
+            </div>
+        </main>
+
+        <!-- Input Area -->
+        <footer class="input-area glass-footer">
+            <div class="input-wrapper">
+                <button id="mic-btn" class="icon-btn mic-btn">
+                    <i class="fa-solid fa-microphone"></i>
+                </button>
+                <input type="text" id="text-input" placeholder="Type a message or use the mic..." autocomplete="off">
+                <button id="send-btn" class="icon-btn send-btn">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </div>
+            <div class="recording-indicator" id="recording-indicator">
+                <div class="pulse-dot"></div>
+                <span>Listening...</span>
+            </div>
+        </footer>
+
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

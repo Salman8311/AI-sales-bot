@@ -1,0 +1,8 @@
+openai
+python-dotenv
+colorama
+fastapi
+uvicorn
+python-multipart
+gTTS
+pydantic
